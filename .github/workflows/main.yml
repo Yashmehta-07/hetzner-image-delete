@@ -52,7 +52,7 @@ jobs:
             cd /root/ECS-nodejs
             aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 339713120550.dkr.ecr.us-east-1.amazonaws.com
             docker pull ${{ steps.build-image.outputs.image }}
-            sed -i "s|image:.*|image: ${{ steps.build-image.outputs.image }}|g" docker-compose.yaml
+            sed -i "s|image:.*|image: ${{ steps.build-image.outputs.image }}|g" docker-compose.yml
             docker-compose down
             docker-compose up -d
           
