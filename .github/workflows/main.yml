@@ -1,0 +1,59 @@
+name: Deploy to Hetzner
+
+on:
+  push:
+    branches:
+      - master 
+
+jobs:
+  deploy:
+    name: Deploy to Hetzner
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: AKIAU6GD23ETI7MFTZPP
+          aws-secret-access-key: 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
+          aws-region: us-east-1
+
+      - name: login to ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Build tag and push image to ECR
+        id: build-image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: node-app
+          IMAGE_TAG: ${{ github.sha }}
+
+        run: |
+          docker build -t node-app .
+          docker tag node-app $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          echo "::set-output name=image::$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+
+
+    
+      - name: Set up SSH
+        uses: webfactory/ssh-agent@v0.5.3
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: SSH into Hetzner Server
+        run: |
+          ssh-keyscan -H github.com >> ~/.ssh/known_hosts
+          ssh -o StrictHostKeyChecking=no root@${{ secrets.HETZNER_IP }} << 'EOF'
+            cd /root/ECS-nodejs
+            aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 339713120550.dkr.ecr.us-east-1.amazonaws.com
+            docker pull ${{ steps.build-image.outputs.image }}
+            sed -i "s|image:.*|image: ${{ steps.build-image.outputs.image }}|g" docker-compose.yaml
+            docker-compose down
+            docker-compose up -d
+          
+          EOF
